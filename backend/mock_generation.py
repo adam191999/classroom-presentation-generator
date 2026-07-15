@@ -38,27 +38,38 @@ def generate_mock_outline(brief: LessonBrief) -> PresentationOutline:
             "Opening Discussion",
             [f"Invite learners to share what they already know about {brief.prompt}"],
         ),
-        (
-            SlideType.CONTENT,
-            "Key Idea",
-            [f"Explain the central idea behind {brief.prompt}", "Give a clear example"],
-        ),
-        (
-            SlideType.CONTENT,
-            "Explore the Topic",
-            [f"Develop understanding of {brief.prompt}", "Connect the idea to practice"],
-        ),
-        (
-            SlideType.MULTIPLE_CHOICE,
-            "Check for Understanding",
-            [f"Check learners' understanding of {brief.prompt}"],
-        ),
+    ]
+
+    pair_count = {10: 1, 15: 2, 20: 3}[brief.duration_minutes]
+    for pair_number in range(1, pair_count + 1):
+        slide_specs.extend(
+            [
+                (
+                    SlideType.CONTENT,
+                    f"Key Idea {pair_number}",
+                    [
+                        f"Explain key idea {pair_number} about {brief.prompt}",
+                        "Give a clear example",
+                    ],
+                ),
+                (
+                    SlideType.MULTIPLE_CHOICE,
+                    f"Check for Understanding {pair_number}",
+                    [
+                        f"Check understanding of key idea {pair_number} about "
+                        f"{brief.prompt}"
+                    ],
+                ),
+            ]
+        )
+
+    slide_specs.append(
         (
             SlideType.SUMMARY,
             "Lesson Summary",
             [f"Review the main ideas from {brief.prompt}", "Prompt a final reflection"],
-        ),
-    ]
+        )
+    )
 
     slides = [
         OutlineSlide(
