@@ -1,15 +1,24 @@
 import { useState } from 'react'
 
 import LessonBriefPage from './pages/LessonBriefPage'
-import type { LessonBrief, PresentationOutline } from './types/presentation'
+import OutlineEditorPage from './pages/OutlineEditorPage'
+import type {
+  LessonBrief,
+  Presentation,
+  PresentationOutline,
+} from './types/presentation'
 import './App.css'
 
 function App() {
+  const [view, setView] = useState<'brief' | 'outline' | 'presentation'>(
+    'brief',
+  )
   const [brief, setBrief] = useState<LessonBrief>({
     prompt: '',
     duration_minutes: 15,
   })
   const [outline, setOutline] = useState<PresentationOutline | null>(null)
+  const [presentation, setPresentation] = useState<Presentation | null>(null)
 
   function handleOutlineGenerated(
     generatedOutline: PresentationOutline,
@@ -17,9 +26,23 @@ function App() {
   ) {
     setBrief(submittedBrief)
     setOutline(generatedOutline)
+    setView('outline')
   }
 
-  if (!outline) {
+  function handleOutlineRegenerated(
+    nextBrief: LessonBrief,
+    nextOutline: PresentationOutline,
+  ) {
+    setBrief(nextBrief)
+    setOutline(nextOutline)
+  }
+
+  function handlePresentationGenerated(nextPresentation: Presentation) {
+    setPresentation(nextPresentation)
+    setView('presentation')
+  }
+
+  if (view === 'brief' || !outline) {
     return (
       <LessonBriefPage
         initialBrief={brief}
@@ -28,20 +51,33 @@ function App() {
     )
   }
 
+  if (view === 'presentation' && presentation) {
+    return (
+      <main className="outline-placeholder">
+        <section>
+          <p className="outline-placeholder-label">Presentation generated</p>
+          <h1>{presentation.title}</h1>
+          <p>
+            {presentation.slides.length}{' '}
+            {presentation.slides.length === 1 ? 'slide' : 'slides'}
+          </p>
+          <button type="button" onClick={() => setView('outline')}>
+            Back to outline
+          </button>
+        </section>
+      </main>
+    )
+  }
+
   return (
-    <main className="outline-placeholder">
-      <section>
-        <p className="outline-placeholder-label">Outline generated</p>
-        <h1>{outline.title}</h1>
-        <p>
-          {outline.slides.length}{' '}
-          {outline.slides.length === 1 ? 'slide' : 'slides'}
-        </p>
-        <button type="button" onClick={() => setOutline(null)}>
-          Back
-        </button>
-      </section>
-    </main>
+    <OutlineEditorPage
+      brief={brief}
+      outline={outline}
+      onOutlineChange={setOutline}
+      onOutlineRegenerated={handleOutlineRegenerated}
+      onPresentationGenerated={handlePresentationGenerated}
+      onBack={() => setView('brief')}
+    />
   )
 }
 
