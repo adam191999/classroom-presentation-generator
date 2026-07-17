@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import LessonBriefPage from './pages/LessonBriefPage'
 import OutlineEditorPage from './pages/OutlineEditorPage'
+import PresentationEditorPage from './pages/PresentationEditorPage'
 import type {
   LessonBrief,
   Presentation,
@@ -53,19 +54,11 @@ function App() {
 
   if (view === 'presentation' && presentation) {
     return (
-      <main className="outline-placeholder">
-        <section>
-          <p className="outline-placeholder-label">Presentation generated</p>
-          <h1>{presentation.title}</h1>
-          <p>
-            {presentation.slides.length}{' '}
-            {presentation.slides.length === 1 ? 'slide' : 'slides'}
-          </p>
-          <button type="button" onClick={() => setView('outline')}>
-            Back to outline
-          </button>
-        </section>
-      </main>
+      <PresentationEditorPage
+        presentation={presentation}
+        onPresentationChange={setPresentation}
+        onBack={() => setView('outline')}
+      />
     )
   }
 
