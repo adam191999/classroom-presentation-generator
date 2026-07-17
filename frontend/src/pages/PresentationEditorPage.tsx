@@ -6,12 +6,14 @@ import {
   type DragEvent,
 } from 'react'
 
+import { generateSlide } from '../services/api'
 import type {
   ContentSlide,
   DiscussionSlide,
   MultipleChoiceSlide,
   Presentation,
   PresentationSlide,
+  SlideType,
   SummarySlide,
   TitleSlide,
 } from '../types/presentation'
@@ -24,6 +26,14 @@ interface PresentationEditorPageProps {
 }
 
 type DropPosition = 'before' | 'after'
+
+const slideTypeOptions: { value: SlideType; label: string }[] = [
+  { value: 'title', label: 'Title' },
+  { value: 'content', label: 'Content' },
+  { value: 'discussion', label: 'Discussion' },
+  { value: 'multiple_choice', label: 'Multiple choice' },
+  { value: 'summary', label: 'Summary' },
+]
 
 function isBlank(value: string | null | undefined): boolean {
   return !value || value.trim().length === 0
@@ -442,18 +452,35 @@ function PresentationEditorPage({
   const [draggedSlideId, setDraggedSlideId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null)
+  const [insertIndex, setInsertIndex] = useState<number | null>(null)
+  const [newSlideType, setNewSlideType] = useState<SlideType>('content')
+  const [newSlideTitle, setNewSlideTitle] = useState('')
+  const [newSlideDescription, setNewSlideDescription] = useState('')
+  const [isGeneratingSlide, setIsGeneratingSlide] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
   const sidebarRef = useRef<HTMLElement>(null)
 
   const selectedSlide =
     presentation.slides.find((slide) => slide.id === selectedSlideId) ??
     presentation.slides[0]
 
+  const trimmedNewTitle = newSlideTitle.trim()
+  const trimmedNewDescription = newSlideDescription.trim()
+  const canGenerateSlide =
+    trimmedNewTitle.length > 0 &&
+    trimmedNewDescription.length >= 10 &&
+    !isGeneratingSlide
+
   useEffect(() => {
-    if (!openMenuId) {
+    if (!openMenuId && insertIndex === null) {
       return
     }
 
     function handlePointerDown(event: MouseEvent) {
+      if (insertIndex !== null) {
+        return
+      }
+
       const target = event.target as Node
       if (!sidebarRef.current?.contains(target)) {
         setOpenMenuId(null)
@@ -469,9 +496,20 @@ function PresentationEditorPage({
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpenMenuId(null)
+      if (event.key !== 'Escape' || isGeneratingSlide) {
+        return
       }
+
+      if (insertIndex !== null) {
+        setInsertIndex(null)
+        setNewSlideType('content')
+        setNewSlideTitle('')
+        setNewSlideDescription('')
+        setGenerateError(null)
+        return
+      }
+
+      setOpenMenuId(null)
     }
 
     document.addEventListener('mousedown', handlePointerDown)
@@ -480,12 +518,79 @@ function PresentationEditorPage({
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [openMenuId])
+  }, [openMenuId, insertIndex, isGeneratingSlide])
 
   function clearDragState() {
     setDraggedSlideId(null)
     setDropTargetId(null)
     setDropPosition(null)
+  }
+
+  function openAddSlideModal(index: number) {
+    setOpenMenuId(null)
+    setInsertIndex(index)
+    setNewSlideType('content')
+    setNewSlideTitle('')
+    setNewSlideDescription('')
+    setGenerateError(null)
+  }
+
+  function closeAddSlideModal() {
+    if (isGeneratingSlide) {
+      return
+    }
+
+    setInsertIndex(null)
+    setNewSlideType('content')
+    setNewSlideTitle('')
+    setNewSlideDescription('')
+    setGenerateError(null)
+  }
+
+  async function handleGenerateSlide() {
+    if (insertIndex === null || !canGenerateSlide) {
+      return
+    }
+
+    const previousSlide = presentation.slides[insertIndex - 1]
+    const nextSlide = presentation.slides[insertIndex]
+
+    setIsGeneratingSlide(true)
+    setGenerateError(null)
+
+    try {
+      const generatedSlide = await generateSlide({
+        presentation_title: presentation.title,
+        learning_objective: presentation.learning_objective,
+        slide_type: newSlideType,
+        title: trimmedNewTitle,
+        content_description: trimmedNewDescription,
+        previous_slide_title: previousSlide?.title ?? null,
+        next_slide_title: nextSlide?.title ?? null,
+      })
+
+      const nextSlides = [...presentation.slides]
+      nextSlides.splice(insertIndex, 0, generatedSlide)
+
+      onPresentationChange({
+        ...presentation,
+        slides: nextSlides,
+      })
+      setSelectedSlideId(generatedSlide.id)
+      setIsGeneratingSlide(false)
+      setInsertIndex(null)
+      setNewSlideType('content')
+      setNewSlideTitle('')
+      setNewSlideDescription('')
+      setGenerateError(null)
+    } catch (requestError) {
+      setGenerateError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to generate the slide. Please try again.',
+      )
+      setIsGeneratingSlide(false)
+    }
   }
 
   function updateSlide(
@@ -661,9 +766,7 @@ function PresentationEditorPage({
                       draggable={true}
                       aria-label={`Drag slide ${index + 1} to reorder`}
                       title="Drag to reorder"
-                      onDragStart={(event) =>
-                        handleDragStart(event, slide.id)
-                      }
+                      onDragStart={(event) => handleDragStart(event, slide.id)}
                       onDragEnd={clearDragState}
                     >
                       ⋮⋮
@@ -712,6 +815,15 @@ function PresentationEditorPage({
                           <button
                             type="button"
                             role="menuitem"
+                            className="thumbnail-menu-add"
+                            onClick={() => openAddSlideModal(index + 1)}
+                          >
+                            Add slide below
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="thumbnail-menu-delete"
                             disabled={presentation.slides.length === 1}
                             onClick={() => deleteSlide(slide.id)}
                           >
@@ -750,6 +862,91 @@ function PresentationEditorPage({
           </div>
         </section>
       </div>
+
+      {insertIndex !== null ? (
+        <div className="add-slide-modal-backdrop">
+          <div
+            className="add-slide-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="generate-slide-modal-title"
+          >
+            <h2 id="generate-slide-modal-title">Generate slide</h2>
+
+            <form
+              className="add-slide-modal-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleGenerateSlide()
+              }}
+            >
+              <label>
+                <span>Slide type</span>
+                <select
+                  value={newSlideType}
+                  disabled={isGeneratingSlide}
+                  onChange={(event) =>
+                    setNewSlideType(event.target.value as SlideType)
+                  }
+                >
+                  {slideTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Title</span>
+                <input
+                  value={newSlideTitle}
+                  disabled={isGeneratingSlide}
+                  onChange={(event) => setNewSlideTitle(event.target.value)}
+                  autoFocus
+                />
+              </label>
+
+              <label>
+                <span>Content description</span>
+                <textarea
+                  value={newSlideDescription}
+                  disabled={isGeneratingSlide}
+                  onChange={(event) =>
+                    setNewSlideDescription(event.target.value)
+                  }
+                  maxLength={500}
+                  rows={4}
+                />
+              </label>
+
+              {generateError ? (
+                <p className="generate-slide-error" role="alert">
+                  {generateError}
+                </p>
+              ) : null}
+
+              <div className="add-slide-modal-actions">
+                <button
+                  type="button"
+                  className="add-slide-cancel"
+                  disabled={isGeneratingSlide}
+                  onClick={closeAddSlideModal}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="add-slide-submit"
+                  disabled={!canGenerateSlide}
+                >
+                  {isGeneratingSlide ? 'Generating slide…' : 'Generate'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }

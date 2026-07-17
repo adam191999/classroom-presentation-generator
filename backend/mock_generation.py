@@ -1,4 +1,4 @@
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from backend.models import (
     ContentSlide,
@@ -148,15 +148,7 @@ def generate_mock_presentation(outline: PresentationOutline) -> Presentation:
 
 
 def generate_mock_slide(request: SlideGenerationRequest) -> PresentationSlide:
-    slide_id = _stable_id(
-        request.presentation_title,
-        request.learning_objective,
-        request.slide_type,
-        request.title,
-        request.content_description,
-        request.previous_slide_title,
-        request.next_slide_title,
-    )
+    slide_id = str(uuid4())
 
     if request.slide_type == SlideType.TITLE:
         return TitleSlide(
