@@ -23,6 +23,7 @@ interface PresentationEditorPageProps {
   presentation: Presentation
   onPresentationChange: (presentation: Presentation) => void
   onBack: () => void
+  onPresent: () => void
 }
 
 type DropPosition = 'before' | 'after'
@@ -444,6 +445,7 @@ function PresentationEditorPage({
   presentation,
   onPresentationChange,
   onBack,
+  onPresent,
 }: PresentationEditorPageProps) {
   const [selectedSlideId, setSelectedSlideId] = useState(
     presentation.slides[0]?.id ?? '',
@@ -856,7 +858,11 @@ function PresentationEditorPage({
           )}
 
           <div className="presentation-footer">
-            <button type="button" className="present-button" disabled>
+            <button
+              type="button"
+              className="present-button"
+              onClick={onPresent}
+            >
               Present
             </button>
           </div>

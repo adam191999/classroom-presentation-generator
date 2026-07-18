@@ -3,6 +3,7 @@ import { useState } from 'react'
 import LessonBriefPage from './pages/LessonBriefPage'
 import OutlineEditorPage from './pages/OutlineEditorPage'
 import PresentationEditorPage from './pages/PresentationEditorPage'
+import PresentationModePage from './pages/PresentationModePage'
 import type {
   LessonBrief,
   Presentation,
@@ -11,9 +12,9 @@ import type {
 import './App.css'
 
 function App() {
-  const [view, setView] = useState<'brief' | 'outline' | 'presentation'>(
-    'brief',
-  )
+  const [view, setView] = useState<
+    'brief' | 'outline' | 'presentation' | 'present-mode'
+  >('brief')
   const [brief, setBrief] = useState<LessonBrief>({
     prompt: '',
     duration_minutes: 15,
@@ -52,12 +53,22 @@ function App() {
     )
   }
 
+  if (view === 'present-mode' && presentation) {
+    return (
+      <PresentationModePage
+        presentation={presentation}
+        onExit={() => setView('presentation')}
+      />
+    )
+  }
+
   if (view === 'presentation' && presentation) {
     return (
       <PresentationEditorPage
         presentation={presentation}
         onPresentationChange={setPresentation}
         onBack={() => setView('outline')}
+        onPresent={() => setView('present-mode')}
       />
     )
   }
