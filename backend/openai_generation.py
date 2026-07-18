@@ -4,7 +4,15 @@ from typing import NoReturn
 from openai import APIError, OpenAI
 from pydantic import ValidationError
 
-from backend.ai_schemas import AIOutline, AIPresentationContent
+from backend.ai_schemas import (
+    AIContentSlideContent,
+    AIDiscussionSlideContent,
+    AIMultipleChoiceSlideContent,
+    AIOutline,
+    AIPresentationContent,
+    AISummarySlideContent,
+    AITitleSlideContent,
+)
 from backend.config import get_settings
 from backend.lesson_structure import slide_types_for_duration
 from backend.models import (
@@ -16,6 +24,8 @@ from backend.models import (
     Presentation,
     PresentationOutline,
     PresentationSlide,
+    SlideGenerationRequest,
+    SlideType,
     SummarySlide,
     TitleSlide,
     generate_uuid,
@@ -35,6 +45,10 @@ class OutlineGenerationError(GenerationError):
 
 class PresentationGenerationError(GenerationError):
     """Raised when OpenAI presentation generation fails or returns invalid output."""
+
+
+class SlideGenerationError(GenerationError):
+    """Raised when OpenAI single-slide generation fails or returns invalid output."""
 
 
 _client: OpenAI | None = None
@@ -449,3 +463,211 @@ def generate_openai_presentation(outline: PresentationOutline) -> Presentation:
             category="conversion into Presentation model",
             cause=exc,
         )
+
+
+_AI_SLIDE_SCHEMAS: dict[
+    SlideType,
+    type[
+        AITitleSlideContent
+        | AIContentSlideContent
+        | AIDiscussionSlideContent
+        | AIMultipleChoiceSlideContent
+        | AISummarySlideContent
+    ],
+] = {
+    SlideType.TITLE: AITitleSlideContent,
+    SlideType.CONTENT: AIContentSlideContent,
+    SlideType.DISCUSSION: AIDiscussionSlideContent,
+    SlideType.MULTIPLE_CHOICE: AIMultipleChoiceSlideContent,
+    SlideType.SUMMARY: AISummarySlideContent,
+}
+
+
+_SLIDE_SYSTEM_INSTRUCTIONS = """\
+You are helping a middle-school teacher add one new slide to an existing classroom \
+presentation for students aged approximately 12–15. The slide must be ready to \
+project.
+
+General rules:
+- Write in the same language as the supplied presentation context.
+- Generate only the requested slide.
+- Follow the teacher’s content description.
+- Fit coherently between the neighboring slides.
+- Avoid repeating the previous slide.
+- Do not introduce material that belongs only to the next slide.
+- Keep text concise and readable on a projected slide.
+- Maintain factual accuracy.
+- Do not use Markdown formatting inside strings.
+- Do not generate IDs, titles, image URLs, or additional slides.
+
+Per slide type:
+- title: Generate a short engaging subtitle. Do not include lesson duration unless \
+it is educationally relevant.
+- content: body should be a short explanation, not a long paragraph. bullet_points \
+should contain 2–4 focused supporting points when possible. Avoid unnecessary \
+repetition between body and bullets.
+- discussion: question should be student-facing and open enough for discussion. \
+teacher_prompt should be a short private facilitation note for the teacher.
+- multiple_choice: Write one clear question. Generate exactly four options. Include \
+one unambiguously correct answer. Distractors should be plausible and preferably \
+reflect misconceptions implied by the content description. correct_option is \
+zero-based. feedback should briefly explain why the answer is correct.
+- summary: Generate 2–4 concise takeaways when possible. End with a short exit \
+question requiring explanation or application.
+"""
+
+
+def _build_slide_input(request: SlideGenerationRequest) -> str:
+    lines = [
+        f"Presentation title:\n{request.presentation_title}",
+        f"Learning objective:\n{request.learning_objective}",
+        f"Requested slide type: {request.slide_type.value}",
+        f"Slide title (fixed, do not change): {request.title}",
+        f"Teacher’s content description:\n{request.content_description}",
+    ]
+
+    if request.previous_slide_title:
+        lines.append(f"Previous slide title: {request.previous_slide_title}")
+    if request.next_slide_title:
+        lines.append(f"Next slide title: {request.next_slide_title}")
+
+    lines.append(
+        "Generate the content for this one slide only, matching the requested type."
+    )
+
+    return "\n\n".join(lines)
+
+
+def generate_openai_slide(request: SlideGenerationRequest) -> PresentationSlide:
+    settings = get_settings()
+    ai_schema = _AI_SLIDE_SCHEMAS[request.slide_type]
+
+    try:
+        response = _get_openai_client().responses.parse(
+            model=settings.openai_model,
+            input=[
+                {
+                    "role": "system",
+                    "content": _SLIDE_SYSTEM_INSTRUCTIONS,
+                },
+                {
+                    "role": "user",
+                    "content": _build_slide_input(request),
+                },
+            ],
+            text_format=ai_schema,
+        )
+    except APIError as exc:
+        _raise_generation_error(
+            SlideGenerationError,
+            "OpenAI slide generation failed. Please try again.",
+            category="OpenAI API request error during slide generation",
+            cause=exc,
+        )
+    except GenerationError:
+        logger.exception(
+            "Generation failed: OpenAI API request setup error during slide generation"
+        )
+        raise
+    except (ValidationError, TypeError, ValueError) as exc:
+        _raise_generation_error(
+            SlideGenerationError,
+            "OpenAI slide generation failed. Please try again.",
+            category=(
+                "Structured Outputs schema creation/parsing error "
+                "during slide generation"
+            ),
+            cause=exc,
+        )
+    except Exception as exc:
+        _raise_generation_error(
+            SlideGenerationError,
+            "OpenAI slide generation failed unexpectedly. Please try again.",
+            category=(
+                "Structured Outputs schema creation/parsing error "
+                "during slide generation"
+            ),
+            cause=exc,
+        )
+
+    parsed = response.output_parsed
+    if parsed is None:
+        _raise_generation_error(
+            SlideGenerationError,
+            "OpenAI returned no structured slide content. Please try again.",
+            category="missing parsed output during slide generation",
+        )
+
+    if parsed.type != request.slide_type.value:
+        _raise_generation_error(
+            SlideGenerationError,
+            "OpenAI returned a slide of the wrong type. "
+            f"Expected {request.slide_type.value}, got {parsed.type}.",
+            category=(
+                "slide type mismatch during slide generation "
+                f"(expected {request.slide_type.value}, got {parsed.type})"
+            ),
+        )
+
+    slide_id = generate_uuid()
+    slide_title = request.title.strip()
+
+    try:
+        if isinstance(parsed, AITitleSlideContent):
+            return TitleSlide(
+                id=slide_id,
+                title=slide_title,
+                subtitle=parsed.subtitle,
+                image_url=None,
+            )
+        if isinstance(parsed, AIContentSlideContent):
+            return ContentSlide(
+                id=slide_id,
+                title=slide_title,
+                body=parsed.body,
+                bullet_points=parsed.bullet_points,
+                image_url=None,
+            )
+        if isinstance(parsed, AIDiscussionSlideContent):
+            return DiscussionSlide(
+                id=slide_id,
+                title=slide_title,
+                question=parsed.question,
+                teacher_prompt=parsed.teacher_prompt,
+            )
+        if isinstance(parsed, AIMultipleChoiceSlideContent):
+            return MultipleChoiceSlide(
+                id=slide_id,
+                title=slide_title,
+                question=parsed.question,
+                options=parsed.options,
+                correct_option=parsed.correct_option,
+                feedback=parsed.feedback,
+            )
+        if isinstance(parsed, AISummarySlideContent):
+            return SummarySlide(
+                id=slide_id,
+                title=slide_title,
+                key_points=parsed.key_points,
+                exit_question=parsed.exit_question,
+            )
+    except Exception as exc:
+        _raise_generation_error(
+            SlideGenerationError,
+            "OpenAI slide generation failed while building the slide. "
+            "Please try again.",
+            category=(
+                "conversion into PresentationSlide model "
+                f"(type {request.slide_type.value})"
+            ),
+            cause=exc,
+        )
+
+    _raise_generation_error(
+        SlideGenerationError,
+        f"OpenAI returned an unsupported slide type: {parsed.type}",
+        category=(
+            "slide type mismatch during slide generation "
+            f"(unsupported type {parsed.type})"
+        ),
+    )
