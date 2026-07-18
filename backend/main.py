@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.config import get_settings
 from backend.mock_generation import (
     generate_mock_outline,
     generate_mock_presentation,
@@ -12,6 +13,10 @@ from backend.models import (
     PresentationOutline,
     PresentationSlide,
     SlideGenerationRequest,
+)
+from backend.openai_generation import (
+    OutlineGenerationError,
+    generate_openai_outline,
 )
 
 
@@ -36,7 +41,15 @@ def health_check():
 
 @app.post("/api/outlines/generate", response_model=PresentationOutline)
 def generate_outline(brief: LessonBrief) -> PresentationOutline:
-    return generate_mock_outline(brief)
+    settings = get_settings()
+
+    if settings.generation_provider == "mock":
+        return generate_mock_outline(brief)
+
+    try:
+        return generate_openai_outline(brief)
+    except OutlineGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/api/presentations/generate", response_model=Presentation)

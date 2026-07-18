@@ -1,5 +1,6 @@
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
+from backend.lesson_structure import slide_types_for_duration
 from backend.models import (
     ContentSlide,
     DiscussionSlide,
@@ -27,59 +28,56 @@ def generate_mock_outline(brief: LessonBrief) -> PresentationOutline:
         f"By the end of this {brief.duration_minutes}-minute lesson, learners will "
         f"be able to explain the main ideas in: {brief.prompt}"
     )
-    slide_specs = [
-        (
-            SlideType.TITLE,
-            title,
-            [f"Introduce the lesson topic: {brief.prompt}"],
-        ),
-        (
-            SlideType.DISCUSSION,
-            "Opening Discussion",
-            [f"Invite learners to share what they already know about {brief.prompt}"],
-        ),
-    ]
 
-    pair_count = {10: 1, 15: 2, 20: 3}[brief.duration_minutes]
-    for pair_number in range(1, pair_count + 1):
-        slide_specs.extend(
-            [
-                (
-                    SlideType.CONTENT,
-                    f"Key Idea {pair_number}",
-                    [
-                        f"Explain key idea {pair_number} about {brief.prompt}",
-                        "Give a clear example",
-                    ],
-                ),
-                (
-                    SlideType.MULTIPLE_CHOICE,
-                    f"Check for Understanding {pair_number}",
-                    [
-                        f"Check understanding of key idea {pair_number} about "
-                        f"{brief.prompt}"
-                    ],
-                ),
+    slides: list[OutlineSlide] = []
+    content_pair_number = 0
+
+    for index, slide_type in enumerate(
+        slide_types_for_duration(brief.duration_minutes)
+    ):
+        if slide_type == SlideType.TITLE:
+            slide_title = title
+            content_summary = [f"Introduce the lesson topic: {brief.prompt}"]
+        elif slide_type == SlideType.DISCUSSION:
+            slide_title = "Opening Discussion"
+            content_summary = [
+                f"Invite learners to share what they already know about {brief.prompt}"
             ]
-        )
+        elif slide_type == SlideType.CONTENT:
+            content_pair_number += 1
+            slide_title = f"Key Idea {content_pair_number}"
+            content_summary = [
+                f"Explain key idea {content_pair_number} about {brief.prompt}",
+                "Give a clear example",
+            ]
+        elif slide_type == SlideType.MULTIPLE_CHOICE:
+            slide_title = f"Check for Understanding {content_pair_number}"
+            content_summary = [
+                f"Check understanding of key idea {content_pair_number} about "
+                f"{brief.prompt}"
+            ]
+        elif slide_type == SlideType.SUMMARY:
+            slide_title = "Lesson Summary"
+            content_summary = [
+                f"Review the main ideas from {brief.prompt}",
+                "Prompt a final reflection",
+            ]
+        else:
+            raise ValueError(f"Unsupported slide type: {slide_type}")
 
-    slide_specs.append(
-        (
-            SlideType.SUMMARY,
-            "Lesson Summary",
-            [f"Review the main ideas from {brief.prompt}", "Prompt a final reflection"],
+        slides.append(
+            OutlineSlide(
+                id=_stable_id(
+                    brief.prompt,
+                    brief.duration_minutes,
+                    index,
+                    slide_type,
+                ),
+                type=slide_type,
+                title=slide_title,
+                content_summary=content_summary,
+            )
         )
-    )
-
-    slides = [
-        OutlineSlide(
-            id=_stable_id(brief.prompt, brief.duration_minutes, index, slide_type),
-            type=slide_type,
-            title=slide_title,
-            content_summary=content_summary,
-        )
-        for index, (slide_type, slide_title, content_summary) in enumerate(slide_specs)
-    ]
 
     return PresentationOutline(
         title=title,
