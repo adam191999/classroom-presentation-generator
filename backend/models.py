@@ -118,3 +118,20 @@ class SlideGenerationRequest(ProjectModel):
     content_description: str = Field(min_length=10, max_length=500)
     previous_slide_title: NonEmptyString | None = None
     next_slide_title: NonEmptyString | None = None
+
+
+ImageCapableSlide = Annotated[
+    TitleSlide | ContentSlide,
+    Field(discriminator="type"),
+]
+
+
+class SlideImageGenerationRequest(ProjectModel):
+    presentation_title: NonEmptyString
+    learning_objective: NonEmptyString
+    slide: ImageCapableSlide
+
+
+class SlideImageGenerationResponse(ProjectModel):
+    slide_id: NonEmptyString
+    image_url: NonEmptyString

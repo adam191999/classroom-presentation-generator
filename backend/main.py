@@ -1,7 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
+from backend.image_generation import (
+    ensure_generated_images_dir,
+    generate_slide_image,
+)
 from backend.mock_generation import (
     generate_mock_outline,
     generate_mock_presentation,
@@ -13,6 +18,8 @@ from backend.models import (
     PresentationOutline,
     PresentationSlide,
     SlideGenerationRequest,
+    SlideImageGenerationRequest,
+    SlideImageGenerationResponse,
 )
 from backend.openai_generation import (
     GenerationError,
@@ -33,6 +40,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.mount(
+    "/generated-images",
+    StaticFiles(directory=ensure_generated_images_dir()),
+    name="generated-images",
 )
 
 
@@ -76,5 +89,26 @@ def generate_slide(request: SlideGenerationRequest) -> PresentationSlide:
 
     try:
         return generate_openai_slide(request)
+    except GenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/images/generate", response_model=SlideImageGenerationResponse)
+def generate_image(
+    request: SlideImageGenerationRequest,
+) -> SlideImageGenerationResponse:
+    settings = get_settings()
+
+    if settings.generation_provider != "openai":
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Image generation requires the OpenAI provider. "
+                "Set GENERATION_PROVIDER=openai in backend/.env."
+            ),
+        )
+
+    try:
+        return generate_slide_image(request)
     except GenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

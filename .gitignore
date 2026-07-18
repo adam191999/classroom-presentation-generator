@@ -11,6 +11,7 @@ backend/.venv/
 
 # Generated media
 backend/generated/
+backend/generated_images/
 
 # Frontend
 frontend/node_modules/

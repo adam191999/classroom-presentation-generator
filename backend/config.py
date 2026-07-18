@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6"
+    openai_image_model: str = "gpt-image-2"
     generation_provider: Literal["openai", "mock"] = "openai"
 
 
