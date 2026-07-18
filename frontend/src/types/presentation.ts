@@ -90,3 +90,14 @@ export interface SlideGenerationRequest {
   previous_slide_title?: string | null
   next_slide_title?: string | null
 }
+
+export interface SlideImageGenerationRequest {
+  presentation_title: string
+  learning_objective: string
+  slide: TitleSlide | ContentSlide
+}
+
+export interface SlideImageGenerationResponse {
+  slide_id: string
+  image_url: string
+}

@@ -4,6 +4,8 @@ import type {
   PresentationOutline,
   PresentationSlide,
   SlideGenerationRequest,
+  SlideImageGenerationRequest,
+  SlideImageGenerationResponse,
 } from '../types/presentation'
 
 const API_BASE_URL =
@@ -47,4 +49,21 @@ export function generateSlide(
   slideRequest: SlideGenerationRequest,
 ): Promise<PresentationSlide> {
   return request<PresentationSlide>('/api/slides/generate', slideRequest)
+}
+
+export function generateSlideImage(
+  imageRequest: SlideImageGenerationRequest,
+): Promise<SlideImageGenerationResponse> {
+  return request<SlideImageGenerationResponse>(
+    '/api/images/generate',
+    imageRequest,
+  )
+}
+
+export function resolveApiAssetUrl(assetUrl: string): string {
+  if (/^(?:[a-z][a-z\d+.-]*:)?\/\//i.test(assetUrl)) {
+    return assetUrl
+  }
+
+  return new URL(assetUrl, `${API_BASE_URL}/`).toString()
 }

@@ -22,6 +22,8 @@ import './PresentationEditorPage.css'
 interface PresentationEditorPageProps {
   presentation: Presentation
   onPresentationChange: (presentation: Presentation) => void
+  imageLoadingSlideIds: ReadonlySet<string>
+  onSlideAdded: (slide: PresentationSlide) => void
   onBack: () => void
   onPresent: () => void
 }
@@ -104,9 +106,11 @@ function SlideTextInput({
 function ImageArea({
   imageUrl,
   alt,
+  isGenerating,
 }: {
   imageUrl?: string | null
   alt: string
+  isGenerating: boolean
 }) {
   if (imageUrl) {
     return (
@@ -117,8 +121,11 @@ function ImageArea({
   }
 
   return (
-    <div className="slide-image-placeholder" aria-hidden="true">
-      <span>Image placeholder</span>
+    <div
+      className="slide-image-placeholder"
+      aria-live={isGenerating ? 'polite' : undefined}
+    >
+      <span>{isGenerating ? 'Generating image…' : 'Image placeholder'}</span>
     </div>
   )
 }
@@ -126,9 +133,11 @@ function ImageArea({
 function TitleSlideView({
   slide,
   onChange,
+  isGeneratingImage,
 }: {
   slide: TitleSlide
   onChange: (changes: Partial<TitleSlide>) => void
+  isGeneratingImage: boolean
 }) {
   return (
     <div className="slide-view slide-view-title">
@@ -148,7 +157,11 @@ function TitleSlideView({
           onChange={(subtitle) => onChange({ subtitle })}
         />
       </div>
-      <ImageArea imageUrl={slide.image_url} alt={slide.title} />
+      <ImageArea
+        imageUrl={slide.image_url}
+        alt={slide.title}
+        isGenerating={isGeneratingImage}
+      />
     </div>
   )
 }
@@ -156,9 +169,11 @@ function TitleSlideView({
 function ContentSlideView({
   slide,
   onChange,
+  isGeneratingImage,
 }: {
   slide: ContentSlide
   onChange: (changes: Partial<ContentSlide>) => void
+  isGeneratingImage: boolean
 }) {
   function updateBullet(index: number, value: string) {
     onChange({
@@ -200,7 +215,11 @@ function ContentSlideView({
           ))}
         </ul>
       </div>
-      <ImageArea imageUrl={slide.image_url} alt={slide.title} />
+      <ImageArea
+        imageUrl={slide.image_url}
+        alt={slide.title}
+        isGenerating={isGeneratingImage}
+      />
     </div>
   )
 }
@@ -375,15 +394,18 @@ function SummarySlideView({
 function SlideCanvas({
   slide,
   onSlideChange,
+  isGeneratingImage,
 }: {
   slide: PresentationSlide
   onSlideChange: (changes: Partial<PresentationSlide>) => void
+  isGeneratingImage: boolean
 }) {
   switch (slide.type) {
     case 'title':
       return (
         <TitleSlideView
           slide={slide}
+          isGeneratingImage={isGeneratingImage}
           onChange={(changes) => onSlideChange(changes)}
         />
       )
@@ -391,6 +413,7 @@ function SlideCanvas({
       return (
         <ContentSlideView
           slide={slide}
+          isGeneratingImage={isGeneratingImage}
           onChange={(changes) => onSlideChange(changes)}
         />
       )
@@ -444,6 +467,8 @@ function slideTypeLabel(type: PresentationSlide['type']): string {
 function PresentationEditorPage({
   presentation,
   onPresentationChange,
+  imageLoadingSlideIds,
+  onSlideAdded,
   onBack,
   onPresent,
 }: PresentationEditorPageProps) {
@@ -579,6 +604,7 @@ function PresentationEditorPage({
         slides: nextSlides,
       })
       setSelectedSlideId(generatedSlide.id)
+      onSlideAdded(generatedSlide)
       setIsGeneratingSlide(false)
       setInsertIndex(null)
       setNewSlideType('content')
@@ -847,6 +873,7 @@ function PresentationEditorPage({
               <div className="slide-canvas">
                 <SlideCanvas
                   slide={selectedSlide}
+                  isGeneratingImage={imageLoadingSlideIds.has(selectedSlide.id)}
                   onSlideChange={(changes) =>
                     updateSlide(selectedSlide.id, changes)
                   }
