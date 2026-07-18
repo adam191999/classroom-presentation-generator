@@ -2,10 +2,14 @@
 .env
 *.env
 !.env.example
+!**/.env.example
 
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
+.venv/
+venv/
 backend/.venv/
 .pytest_cache/
 
@@ -19,5 +23,6 @@ frontend/dist/
 
 # Editors and operating systems
 .vscode/
+.idea/
 .DS_Store
 Thumbs.db

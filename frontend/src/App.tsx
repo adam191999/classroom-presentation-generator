@@ -13,7 +13,6 @@ import type {
   PresentationSlide,
   TitleSlide,
 } from './types/presentation'
-import './App.css'
 
 type ImageCapableSlide = TitleSlide | ContentSlide
 
