@@ -15,8 +15,9 @@ from backend.models import (
     SlideGenerationRequest,
 )
 from backend.openai_generation import (
-    OutlineGenerationError,
+    GenerationError,
     generate_openai_outline,
+    generate_openai_presentation,
 )
 
 
@@ -48,13 +49,21 @@ def generate_outline(brief: LessonBrief) -> PresentationOutline:
 
     try:
         return generate_openai_outline(brief)
-    except OutlineGenerationError as exc:
+    except GenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/api/presentations/generate", response_model=Presentation)
 def generate_presentation(outline: PresentationOutline) -> Presentation:
-    return generate_mock_presentation(outline)
+    settings = get_settings()
+
+    if settings.generation_provider == "mock":
+        return generate_mock_presentation(outline)
+
+    try:
+        return generate_openai_presentation(outline)
+    except GenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/api/slides/generate", response_model=PresentationSlide)
