@@ -4,6 +4,11 @@ from typing import NoReturn
 from openai import APIError, OpenAI
 from pydantic import ValidationError
 
+from backend.answer_positioning import (
+    position_for_multiple_choice_ordinal,
+    reposition_correct_option,
+    stable_correct_position,
+)
 from backend.ai_schemas import (
     AIContentSlideContent,
     AIDiscussionSlideContent,
@@ -95,7 +100,12 @@ Match the requested lesson duration.
 Follow the exact ordered slide structure supplied by the application.
 Each content slide introduces one focused idea.
 Each multiple-choice slide checks understanding of the content immediately before it.
-The opening discussion should activate curiosity or intuition.
+The opening discussion should activate students’ existing knowledge, associations, \
+observations, or intuition through a simple, accessible question. It should allow \
+several reasonable initial responses, create curiosity, and give the teacher a \
+natural bridge into the first content slide. It must not test whether students \
+already understand the lesson, require a specific causal explanation, or depend on \
+technical knowledge that has not been taught yet.
 The summary should consolidate the central ideas and end with reflection.
 Keep the plan age-appropriate, accurate, and concise.
 Do not include image URLs.
@@ -108,8 +118,13 @@ Do not repeat labels such as "title slide" or the slide type.
 
 For each required slide type:
 - title: Describe the framing or opening idea; do not include duration metadata.
-- discussion: Describe the discussion goal and central question idea; do not fully \
-script the classroom activity.
+- discussion: Describe a foundational discussion goal and central question idea; do \
+not fully script the classroom activity or frame it as an assessment with one \
+expected answer. Prefer accessible prompts such as "What are yeast?", "What comes \
+to mind when you hear the term revolution?", "Where have you encountered this \
+phenomenon?", or "What do you think this concept means?" Avoid prompts such as \
+"How do yeast affect baked goods?", "Why did this process occur?", or "Explain how \
+this mechanism works."
 - content: List the concepts, explanation, or example that the final slide should cover.
 - multiple_choice: Describe what understanding should be checked and, optionally, \
 the misconception to test. Do not generate answer options, lettered choices, or the \
@@ -259,12 +274,20 @@ it is educationally relevant.
 - content: body should be a short explanation, not a long paragraph. bullet_points \
 should contain 2–4 focused supporting points when possible. Avoid unnecessary \
 repetition between body and bullets.
-- discussion: question should be student-facing and open enough for discussion. \
-teacher_prompt should be a short private facilitation note for the teacher.
+- discussion: question should be short, student-facing, foundational, and open to \
+several reasonable initial responses. It should activate existing knowledge, \
+associations, observations, or intuition without testing understanding, requiring a \
+specific causal explanation, or assuming technical knowledge not yet taught. Do not \
+phrase it as an assessment or a question with one expected answer. teacher_prompt \
+should be a short private facilitation note that invites a few responses and then \
+bridges naturally toward the lesson’s first content slide.
 - multiple_choice: Write one clear question. Generate exactly four options. Include \
 one unambiguously correct answer. Distractors should be plausible and preferably \
 reflect misconceptions described in the outline. correct_option is zero-based. \
-feedback should briefly explain why the answer is correct.
+feedback should briefly explain why the answer is correct. Do not assume that the \
+correct answer should be the first option. Do not use position-dependent options \
+such as "all of the above" or "none of the above", because options may be reordered \
+by the backend.
 - summary: Generate 2–4 concise takeaways when possible. End with a short exit \
 question requiring explanation or application.
 
@@ -368,6 +391,7 @@ def generate_openai_presentation(outline: PresentationOutline) -> Presentation:
         )
 
     slides: list[PresentationSlide] = []
+    multiple_choice_ordinal = 0
 
     for index, (outline_slide, ai_slide) in enumerate(
         zip(outline.slides, parsed.slides, strict=True)
@@ -409,12 +433,21 @@ def generate_openai_presentation(outline: PresentationOutline) -> Presentation:
                     teacher_prompt=ai_slide.teacher_prompt,
                 )
             elif ai_slide.type == "multiple_choice":
+                options, correct_option = reposition_correct_option(
+                    ai_slide.options,
+                    ai_slide.correct_option,
+                    position_for_multiple_choice_ordinal(
+                        multiple_choice_ordinal,
+                        len(ai_slide.options),
+                    ),
+                )
+                multiple_choice_ordinal += 1
                 slide = MultipleChoiceSlide(
                     id=outline_slide.id,
                     title=outline_slide.title,
                     question=ai_slide.question,
-                    options=ai_slide.options,
-                    correct_option=ai_slide.correct_option,
+                    options=options,
+                    correct_option=correct_option,
                     feedback=ai_slide.feedback,
                 )
             elif ai_slide.type == "summary":
@@ -506,12 +539,20 @@ it is educationally relevant.
 - content: body should be a short explanation, not a long paragraph. bullet_points \
 should contain 2–4 focused supporting points when possible. Avoid unnecessary \
 repetition between body and bullets.
-- discussion: question should be student-facing and open enough for discussion. \
-teacher_prompt should be a short private facilitation note for the teacher.
+- discussion: Keep the slide discussion-oriented even when it appears later in the \
+presentation. question should be short, student-facing, foundational, and open to \
+several reasonable responses. It should activate knowledge, associations, \
+observations, or intuition rather than assess understanding, demand a specific \
+causal explanation, or assume untaught technical knowledge. Do not phrase it as a \
+question with one expected answer. teacher_prompt should briefly invite a few \
+responses and bridge naturally into the surrounding lesson content.
 - multiple_choice: Write one clear question. Generate exactly four options. Include \
 one unambiguously correct answer. Distractors should be plausible and preferably \
 reflect misconceptions implied by the content description. correct_option is \
-zero-based. feedback should briefly explain why the answer is correct.
+zero-based. feedback should briefly explain why the answer is correct. Do not \
+assume that the correct answer should be the first option. Do not use \
+position-dependent options such as "all of the above" or "none of the above", \
+because options may be reordered by the backend.
 - summary: Generate 2–4 concise takeaways when possible. End with a short exit \
 question requiring explanation or application.
 """
@@ -636,12 +677,17 @@ def generate_openai_slide(request: SlideGenerationRequest) -> PresentationSlide:
                 teacher_prompt=parsed.teacher_prompt,
             )
         if isinstance(parsed, AIMultipleChoiceSlideContent):
+            options, correct_option = reposition_correct_option(
+                parsed.options,
+                parsed.correct_option,
+                stable_correct_position(slide_id, len(parsed.options)),
+            )
             return MultipleChoiceSlide(
                 id=slide_id,
                 title=slide_title,
                 question=parsed.question,
-                options=parsed.options,
-                correct_option=parsed.correct_option,
+                options=options,
+                correct_option=correct_option,
                 feedback=parsed.feedback,
             )
         if isinstance(parsed, AISummarySlideContent):

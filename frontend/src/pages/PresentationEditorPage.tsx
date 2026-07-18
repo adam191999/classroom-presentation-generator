@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -46,9 +47,49 @@ function fieldClass(base: string, value: string): string {
   return isBlank(value) ? `${base} is-empty` : base
 }
 
-function resizeTextarea(textarea: HTMLTextAreaElement) {
+function resizeTextarea(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) {
+    return
+  }
+
   textarea.style.height = 'auto'
   textarea.style.height = `${textarea.scrollHeight}px`
+}
+
+function AutoResizeTextarea({
+  className,
+  value,
+  onChange,
+  ariaLabel,
+  rows,
+}: {
+  className: string
+  value: string
+  onChange: (value: string) => void
+  ariaLabel: string
+  rows: number
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useLayoutEffect(() => {
+    resizeTextarea(textareaRef.current)
+  }, [value])
+
+  function handleChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    resizeTextarea(event.currentTarget)
+    onChange(event.currentTarget.value)
+  }
+
+  return (
+    <textarea
+      ref={textareaRef}
+      className={className}
+      value={value}
+      aria-label={ariaLabel}
+      rows={rows}
+      onChange={handleChange}
+    />
+  )
 }
 
 function SlideTextInput({
@@ -66,28 +107,14 @@ function SlideTextInput({
   multiline?: boolean
   rows?: number
 }) {
-  function handleChange(
-    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) {
-    onChange(event.target.value)
-    if (event.target instanceof HTMLTextAreaElement) {
-      resizeTextarea(event.target)
-    }
-  }
-
   if (multiline) {
     return (
-      <textarea
+      <AutoResizeTextarea
         className={className}
         value={value}
-        aria-label={ariaLabel}
+        ariaLabel={ariaLabel}
         rows={rows}
-        onChange={handleChange}
-        ref={(element) => {
-          if (element) {
-            resizeTextarea(element)
-          }
-        }}
+        onChange={onChange}
       />
     )
   }
@@ -98,7 +125,7 @@ function SlideTextInput({
       type="text"
       value={value}
       aria-label={ariaLabel}
-      onChange={handleChange}
+      onChange={(event) => onChange(event.currentTarget.value)}
     />
   )
 }
@@ -146,6 +173,8 @@ function TitleSlideView({
           className={fieldClass('slide-title-input', slide.title)}
           value={slide.title}
           ariaLabel="Slide title"
+          multiline
+          rows={1}
           onChange={(title) => onChange({ title })}
         />
         <SlideTextInput
@@ -190,6 +219,8 @@ function ContentSlideView({
           className={fieldClass('slide-title-input', slide.title)}
           value={slide.title}
           ariaLabel="Slide title"
+          multiline
+          rows={1}
           onChange={(title) => onChange({ title })}
         />
         <SlideTextInput
@@ -237,6 +268,8 @@ function DiscussionSlideView({
         className={fieldClass('slide-title-input', slide.title)}
         value={slide.title}
         ariaLabel="Slide title"
+        multiline
+        rows={1}
         onChange={(title) => onChange({ title })}
       />
       <SlideTextInput
@@ -283,6 +316,8 @@ function MultipleChoiceSlideView({
         className={fieldClass('slide-title-input', slide.title)}
         value={slide.title}
         ariaLabel="Slide title"
+        multiline
+        rows={1}
         onChange={(title) => onChange({ title })}
       />
       <SlideTextInput
@@ -360,6 +395,8 @@ function SummarySlideView({
         className={fieldClass('slide-title-input', slide.title)}
         value={slide.title}
         ariaLabel="Slide title"
+        multiline
+        rows={1}
         onChange={(title) => onChange({ title })}
       />
       <ul className="slide-bullets slide-bullets-editable">

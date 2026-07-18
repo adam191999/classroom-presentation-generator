@@ -1,5 +1,10 @@
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
+from backend.answer_positioning import (
+    position_for_multiple_choice_ordinal,
+    reposition_correct_option,
+    stable_correct_position,
+)
 from backend.lesson_structure import slide_types_for_duration
 from backend.models import (
     ContentSlide,
@@ -88,6 +93,7 @@ def generate_mock_outline(brief: LessonBrief) -> PresentationOutline:
 
 def generate_mock_presentation(outline: PresentationOutline) -> Presentation:
     slides: list[PresentationSlide] = []
+    multiple_choice_ordinal = 0
 
     for outline_slide in outline.slides:
         summaries = outline_slide.content_summary
@@ -113,17 +119,23 @@ def generate_mock_presentation(outline: PresentationOutline) -> Presentation:
                 teacher_prompt=f"Guide the discussion toward: {outline.learning_objective}",
             )
         elif outline_slide.type == SlideType.MULTIPLE_CHOICE:
+            options, correct_option = reposition_correct_option(
+                [
+                    "The first key idea",
+                    "A related but incomplete idea",
+                    "An unrelated idea",
+                    "A common misconception",
+                ],
+                0,
+                position_for_multiple_choice_ordinal(multiple_choice_ordinal, 4),
+            )
+            multiple_choice_ordinal += 1
             slide = MultipleChoiceSlide(
                 id=outline_slide.id,
                 title=outline_slide.title,
                 question=summaries[0],
-                options=[
-                    "The first key idea",
-                    "A related but incomplete idea",
-                    "An unrelated idea",
-                    "None of the above",
-                ],
-                correct_option=0,
+                options=options,
+                correct_option=correct_option,
                 feedback=f"Review the lesson objective: {outline.learning_objective}",
             )
         elif outline_slide.type == SlideType.SUMMARY:
@@ -172,17 +184,22 @@ def generate_mock_slide(request: SlideGenerationRequest) -> PresentationSlide:
         )
 
     if request.slide_type == SlideType.MULTIPLE_CHOICE:
+        options, correct_option = reposition_correct_option(
+            [
+                "The best answer",
+                "A plausible alternative",
+                "An unrelated answer",
+                "A common misconception",
+            ],
+            0,
+            stable_correct_position(slide_id, 4),
+        )
         return MultipleChoiceSlide(
             id=slide_id,
             title=request.title,
             question=request.content_description,
-            options=[
-                "The best answer",
-                "A plausible alternative",
-                "An unrelated answer",
-                "Not enough information",
-            ],
-            correct_option=0,
+            options=options,
+            correct_option=correct_option,
             feedback=f"Use the objective to review your answer: {request.learning_objective}",
         )
 

@@ -357,7 +357,13 @@ function OutlineEditorPage({
           <button className="outline-back-button" type="button" onClick={onBack}>
             <span aria-hidden="true">←</span> Back
           </button>
-          <h1>Lesson outline</h1>
+          <div className="outline-editor-heading">
+            <h1>Lesson Outline</h1>
+            <p>
+              Review and adjust the lesson structure before generating the full
+              presentation.
+            </p>
+          </div>
         </header>
 
         <section className="brief-editor" aria-label="Lesson brief">
