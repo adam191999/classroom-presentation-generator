@@ -1,6 +1,6 @@
-# AI Lesson Generator
+# Classroom Presentation Generator
 
-Lamma Lesson Generator is an AI-powered tool for middle-school teachers. It turns a topic or detailed brief into a short, editable classroom presentation. The teacher uses the editor; students are the audience.
+Classroom Presentation Generator is an AI-powered tool for middle-school teachers. It turns a topic or detailed brief into a short, editable classroom presentation. The teacher uses the editor; students are the audience.
 
 I framed the problem as lesson design, not slide production: combine explanation, participation, and checks for understanding while leaving the teacher in control.
 
@@ -37,6 +37,8 @@ The classroom view supports keyboard and mouse navigation; the teacher controls 
 Returning to the outline does not synchronize presentation edits back into it. Generating again creates a new presentation and replaces the previous Stage 3 edits.
 
 ## Key decisions
+
+
 
 ### Focused audience and minimal input
 
@@ -77,6 +79,8 @@ Students need no accounts or devices. The teacher gathers responses and reveals 
 Structural and text regeneration require a user action because calls cost time and may replace edits. Eligible image requests start automatically in the background.
 
 ## Architecture and AI pipeline
+
+
 
 ### Frontend
 
@@ -167,6 +171,8 @@ GENERATION_PROVIDER=mock
 # Tests the product flow, editing, and presentation without OpenAI text calls.
 # Image generation is disabled, so placeholders remain.
 ```
+
+
 
 ## Validation
 
