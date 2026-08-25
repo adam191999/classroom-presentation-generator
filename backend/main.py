@@ -30,7 +30,7 @@ from backend.openai_generation import (
 
 
 app = FastAPI(
-    title="Lamma Lesson Generator API",
+    title="Classroom Presentation Generator API",
     version="0.1.0",
 )
 
